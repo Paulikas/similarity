@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ssh://virginijus@158.129.140.156:22/home/virginijus/tensorflow/bin/python" name="ssh://virginijus@158.129.140.156:22/home/virginijus/tensorflow/bin/python" url="http://158.129.140.156">
+        <fileTransfer host="158.129.140.156" port="22" rootFolder="/home/virginijus" accessType="SFTP">
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

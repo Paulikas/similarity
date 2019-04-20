@@ -1,10 +1,12 @@
 import tensorflow as tf
 import numpy as np
+from time import time
 
 from keras import backend, applications, optimizers, losses
 from keras.models import Sequential
 from keras.layers import Input, Dropout, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
+from keras.callbacks import TensorBoard
 
 from sklearn.metrics import confusion_matrix, mean_squared_error
 
@@ -83,8 +85,8 @@ def metric_positive_distance(y_true, y_pred):
   anchor = y_pred[0::3]
   positive = y_pred[1::3]
   positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 1)
-  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  #positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
   return backend.mean(positive_distance)
 
 def metric_negative_distance(y_true, y_pred):
@@ -94,8 +96,8 @@ def metric_negative_distance(y_true, y_pred):
   anchor = y_pred[0::3]
   negative = y_pred[2::3]
   negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 1)
-  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
-  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  #negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
   return backend.mean(negative_distance)
 
 def train_top_model():
@@ -108,11 +110,13 @@ def train_top_model():
   top_model.add(Dropout(0.5))
   top_model.add(Dense(1, activation = 'sigmoid'))
 
-  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
 
-  top_model.summary()
+  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
   y_dummie = np.array([1, 1, 0] * (int(nb_train_samples)))
-  top_model.fit(train_data, y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False)
+
+  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+  
+  top_model.fit(train_data, y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
   top_model.save_weights(top_model_weights_path)
     
 if __name__ == '__main__':

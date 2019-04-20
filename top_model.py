@@ -3,7 +3,7 @@ import numpy as np
 
 from keras import backend, applications, optimizers, losses
 from keras.models import Sequential
-from keras.layers import Dropout, Flatten, Dense
+from keras.layers import Input, Dropout, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
 
 from sklearn.metrics import confusion_matrix, mean_squared_error
@@ -42,86 +42,78 @@ def save_features():
   
   vgg16_model = applications.VGG16(include_top = False, weights = 'imagenet')
 
-  generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)#, save_to_dir = 'train_augmented')
+  generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
+  #, save_to_dir = 'train_augmented')
+  
   top_model_features_train = vgg16_model.predict_generator(generator, nb_train_samples)
   np.save(open(train_features_file, 'wb'), top_model_features_train)
 
-  generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)#, save_to_dir = 'test_augmented')
+  generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
+  #, save_to_dir = 'test_augmented')
+
   top_model_features_valid = vgg16_model.predict_generator(generator, nb_valid_samples)
   np.save(open(valid_features_file, 'wb'), top_model_features_valid)
 
-# Nenaudojama y_true
-# Klaida triplet loss funkcijoje
+def triplet_loss(y_true, y_pred):
+  N = 3
+  beta = N
+  epsilon = 1e-8
 
-def triplet_loss(layer):
+  anchor = y_pred[0::3]
+  positive = y_pred[1::3]
+  negative = y_pred[2::3]
 
-  def loss(y_true, y_pred):
-    # It's a margin should be in range (0, 1)
-    #alpha = 0.5
-    #embeddings = backend.reshape(y_pred, (-1, 3))
-    embeddings = y_pred
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 1)
+  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 1)
 
-    positive_distance = backend.sum(backend.square(embeddings[0::3] - embeddings[1::3]))
+  # -ln(-x/N+1)
+  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    
+  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
 
-    negative_distance = backend.sum(backend.square(embeddings[0::3] - embeddings[2::3]))
-
-    #return backend.maximum(0.0, positive_distance - negative_distance + alpha)
-    return (positive_distance - negative_distance)
-   
+  loss = negative_distance + positive_distance
   return loss
+   
+def metric_positive_distance(y_true, y_pred):
+  N = 3
+  beta = N
+  epsilon = 1e-8
+  anchor = y_pred[0::3]
+  positive = y_pred[1::3]
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 1)
+  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  return backend.mean(positive_distance)
 
-
-def acc_metric(y_true, y_pred):
-    return backend.mean(y_pred)
+def metric_negative_distance(y_true, y_pred):
+  N = 3
+  beta = N
+  epsilon = 1e-8
+  anchor = y_pred[0::3]
+  negative = y_pred[2::3]
+  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 1)
+  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  return backend.mean(negative_distance)
 
 def train_top_model():
   train_data = np.load(open('top_model_features_train.npy', 'rb'))
-  train_labels = np.array([1, 1, 0] * (int(nb_train_samples)))
-  # Klases visos nuliai tai accuracy nedaug ka gali pasakyti
-  
   valid_data = np.load(open('top_model_features_valid.npy', 'rb'))
-  valid_labels = np.array([1, 1, 0] * (int(nb_valid_samples)))
 
   top_model = Sequential()
   top_model.add(Flatten(input_shape = train_data.shape[1:]))
   top_model.add(Dense(64, activation = 'relu'))
   top_model.add(Dropout(0.5))
-  top_model.add(Dense(1, activation = 'sigmoid', name='layer1'))
+  top_model.add(Dense(1, activation = 'sigmoid'))
 
+  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
 
-  # Batch size gali buti didesnis uz 3, nes gradientas apskaiciuojamas iverstinant daugiau kaimynu
-  # lr reiktu didesnio negu buvo 0.00001, nes tuomet labai letai konverguos
-
-  sgd_optimizer = optimizers.SGD(lr = 0.001, decay = 1e-6, momentum = 0.9, nesterov = True)
-  top_model.compile(optimizer = sgd_optimizer, loss = triplet_loss(top_model.get_layer('layer1')), metrics = [acc_metric])
-  
   top_model.summary()
-
-  # Pakeitus triplet_loss i losses.mean_squared_error modelis ismoksa taskirti pirmus du paveikslelius (1klase)
-  # nuo 3 paveiklelio (0) klase. Tai reiskia kad sugeneruoti 1 klases paveiksleliai turi bendru paternu (Dense(64))
-
-  # top_model.fit(train_data, train_labels, epochs = args.epochs, batch_size = args.batch_size*11, shuffle=True) # kodel 11?
-  top_model.fit(train_data, train_labels, epochs = args.epochs, batch_size = args.batch_size, shuffle=True)
-
+  y_dummie = np.array([1, 1, 0] * (int(nb_train_samples)))
+  top_model.fit(train_data, y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False)
   top_model.save_weights(top_model_weights_path)
-
-  # Su triplet_loss ismoksta viska vienai kalasiai priskirti ir tiek
-  pred_valid = top_model.predict(valid_data, batch_size=32)
-
-  # Cia gali buti klaida del neteisingo shape (1251, 20, 15, 512)
-  print("train data shape:")
-  print(train_data.shape)
-
-  print("validation data shape")
-  print(valid_data.shape)
-
-  print("train labels:")
-  print(train_labels)
-
-  print("predictions valid:")
-  print(pred_valid[0:9], pred_valid.shape)
-
-  print('Validation MSE', mean_squared_error(valid_labels, pred_valid))
     
 if __name__ == '__main__':
   nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
@@ -134,4 +126,3 @@ if __name__ == '__main__':
   else:
     print("Dataset images were not found")
 
-# https://towardsdatascience.com/advanced-keras-constructing-complex-custom-losses-and-metrics-c07ca130a618

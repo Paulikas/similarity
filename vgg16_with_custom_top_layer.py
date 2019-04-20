@@ -9,6 +9,7 @@ import tensorflow as tf
 import numpy as np
 import os.path
 
+#os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 """
 WGG16 with custom top layer

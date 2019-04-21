@@ -35,6 +35,7 @@ args = parser.parse_args()
 
 #img_width, img_height = 224, 224
 top_model_weights_path = 'top_model_weights.h5'
+vgg16_model_weights_path = 'vgg16_model_weights.h5'
 train_features_file = 'top_model_features_train.npy'
 valid_features_file = 'top_model_features_valid.npy'
 
@@ -55,6 +56,8 @@ def save_features():
 
   top_model_features_valid = vgg16_model.predict_generator(generator, nb_valid_samples)
   np.save(open(valid_features_file, 'wb'), top_model_features_valid)
+
+  vgg16_model.save_weights(vgg16_model_weights_path)
 
 def triplet_loss(y_true, y_pred):
   N = 3
@@ -107,11 +110,11 @@ def train_top_model():
 
 
   top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
-  y_dummie = np.array([1, 1, 0] * (int(nb_train_samples)))
+  y_dummie = 0 * train_data
 
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
 
-  top_model.fit(train_data, y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
+  top_model.fit(x = train_data, y = y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
   top_model.save_weights(top_model_weights_path)
 
 if __name__ == '__main__':

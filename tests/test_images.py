@@ -7,61 +7,64 @@ import numpy as np
 import tensorflow as tf
 import os
 
-
 import cv2
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 print("TensorFlow version: " + tf.__version__)
 
-def acc_metric(y_true, y_pred):
-    return backend.mean(y_pred)
+def triplet_loss(y_true, y_pred):
+  N = 3
+  beta = N
+  epsilon = 1e-6
 
-def triplet_loss(layer):
+  anchor = y_pred[0::3]
+  positive = y_pred[1::3]
+  negative = y_pred[2::3]
 
-  def loss(y_true, y_pred):
-    embeddings = y_pred
-    positive_distance = backend.sum(backend.square(embeddings[0::3] - embeddings[1::3]))
-    negative_distance = backend.sum(backend.square(embeddings[0::3] - embeddings[2::3]))
-    return (positive_distance - negative_distance)
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
+  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
+
+  # -ln(-x/N+1)
+  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+
+  loss = negative_distance + positive_distance
   return loss
 
-img_width, img_height = 224, 224
+def metric_positive_distance(y_true, y_pred):
+  N = 3
+  beta = N
+  epsilon = 1e-6
+  anchor = y_pred[0::3]
+  positive = y_pred[1::3]
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
+  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  return backend.mean(positive_distance)
+
+#vgg16_model_weights_path = '../vgg16_model_weights.h5'
 top_model_weights_path = '../top_model_weights.h5'
-#test_data_dir = '/opt/datasets/data/simulated_flight_1/valid/'
-#nb_test_samples = 12
-batch_size = 32
 
-input_tensor = Input(shape=(7, 7, 512))
-
-#vgg16_model = applications.VGG16(weights='imagenet', include_top=False, input_tensor=input_tensor)
-
+#vgg16_model = applications.VGG16(weights = vgg16_model_weights_path, include_top=False)
 valid_data = np.load(open('../top_model_features_valid.npy', 'rb'))
-#valid_labels = np.array([1, 1, 0] * (int(nb_valid_samples)))
 
 top_model = Sequential()
 top_model.add(Flatten(input_shape = valid_data.shape[1:]))
 top_model.add(Dense(64, activation = 'relu'))
 top_model.add(Dropout(0.5))
 top_model.add(Dense(1, activation = 'sigmoid', name='layer1'))
-
-
 top_model.load_weights(top_model_weights_path)
+top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance])
 
-sgd_optimizer = optimizers.SGD(lr = 0.001, decay = 1e-6, momentum = 0.9, nesterov = True)
-top_model.compile(optimizer = sgd_optimizer, loss = triplet_loss(top_model.get_layer('layer1')), metrics = [acc_metric])
+y_dummie = np.array([0] * 315)
 
-# test_datagen = ImageDataGenerator()
-#test_datagen = ImageDataGenerator()
-
-
-#test_generator = test_datagen.flow_from_directory(test_data_dir, target_size=(img_height, img_width), batch_size = batch_size, class_mode='binary')
-
-results = top_model.predict(x=valid_data)
-
+print(top_model.metrics_names)
+#for i in range(300, 315, 3):
+#print(valid_data[i:i+3].shape)
+i = 0
+#results = top_model.evaluate(x = valid_data[i:i+6], y = valid_data[i:i+6],  batch_size = 3, verbose = 0)
+results = top_model.predict(x = valid_data,  batch_size = 3, verbose = 0)
 print(results)
-
-#pred = top_model.predict(train_data, batch_size=32)
 
 '''
 img = cv2.imread(test_data_dir + "/0/image-0477.png")

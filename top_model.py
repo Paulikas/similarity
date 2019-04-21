@@ -44,6 +44,7 @@ def save_features():
   datagen = ImageDataGenerator()
 
   vgg16_model = applications.VGG16(include_top = False, weights = 'imagenet')
+  vgg16_model.summary()
 
   generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
   #, save_to_dir = 'train_augmented')

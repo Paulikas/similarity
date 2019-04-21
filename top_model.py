@@ -11,12 +11,9 @@ from keras.callbacks import TensorBoard
 
 from keras.applications import VGG16
 
-from sklearn.metrics import confusion_matrix, mean_squared_error
-
 import os.path
 import argparse
 
-#backend.set_image_dim_ordering('th') 
 tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 print("TensorFlow version: " + tf.__version__)
@@ -37,30 +34,22 @@ parser.add_argument('-b', '--batch-size', dest='batch_size', type=int,
 
 args = parser.parse_args()
 
-#img_width, img_height = 224, 224
 top_model_weights_path = 'top_model_weights.h5'
 vgg16_model_weights_path = 'vgg16_model_weights.h5'
 train_features_file = 'top_model_features_train.npy'
 valid_features_file = 'top_model_features_valid.npy'
 
 def save_features():
-
   datagen = ImageDataGenerator()
-
   vgg16_model = applications.VGG16(include_top = False, weights = 'imagenet')
-
   generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
   #, save_to_dir = 'train_augmented')
-
   top_model_features_train = vgg16_model.predict_generator(generator, nb_train_samples)
   np.save(open(train_features_file, 'wb'), top_model_features_train)
-
   generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
   #, save_to_dir = 'test_augmented')
-
   top_model_features_valid = vgg16_model.predict_generator(generator, nb_valid_samples)
   np.save(open(valid_features_file, 'wb'), top_model_features_valid)
-
   vgg16_model.save_weights(vgg16_model_weights_path)
 
 def triplet_loss(y_true, y_pred):
@@ -132,33 +121,23 @@ def fine_tune_model():
   valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
 
   base_model = Model(inputs = vgg16_model.input, outputs = vgg16_model.outputs)
-  #base_output = base_model.output
-
-  # Fix or unfix vgg layers for training
+  
   for layer in base_model.layers[0:18]:
     layer.trainable = True
 
-  top_model = Sequential()
-  top_model.add(Flatten(input_shape = base_model.output_shape[1:]))
-  top_model.add(Dense(64, activation = 'relu'))
-  top_model.add(Dropout(0.5))
-  top_model.add(Dense(1, activation = 'sigmoid'))
-
+  top_model = make_top_model(base_model.output_shape[1:])
   top_model.load_weights('top_model_weights.h5')
-  #top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
-  
+
   model = Sequential()
   model.add(base_model)
   model.add(top_model)
 
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
+  
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
   
-  #model_features_valid = model.predict_generator(train_generator, nb_train_samples)
-
   model.fit_generator(train_generator, nb_train_samples, epochs = 100)
-  #model.fit_generator(generator = train_generator, steps_per_epoch = 300 // args.batch_size, epochs = args.epochs, validation_data = valid_generator, validation_steps = 300 // args.batch_size)
-
+  
   #model.save_weights(top_model_weights_path)
 
 if __name__ == '__main__':
@@ -172,4 +151,3 @@ if __name__ == '__main__':
     fine_tune_model()
   else:
     print("Dataset images were not found")
-

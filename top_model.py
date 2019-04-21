@@ -41,12 +41,12 @@ valid_features_file = 'top_model_features_valid.npy'
 def save_features():
 
   datagen = ImageDataGenerator()
-  
+
   vgg16_model = applications.VGG16(include_top = False, weights = 'imagenet')
 
   generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
   #, save_to_dir = 'train_augmented')
-  
+
   top_model_features_train = vgg16_model.predict_generator(generator, nb_train_samples)
   np.save(open(train_features_file, 'wb'), top_model_features_train)
 
@@ -59,45 +59,45 @@ def save_features():
 def triplet_loss(y_true, y_pred):
   N = 3
   beta = N
-  epsilon = 1e-8
+  epsilon = 1e-6
 
   anchor = y_pred[0::3]
   positive = y_pred[1::3]
   negative = y_pred[2::3]
 
-  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 1)
-  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 1)
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
+  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
 
   # -ln(-x/N+1)
-  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
-    
-  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
-  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+
+  #positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  #negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
 
   loss = negative_distance + positive_distance
   return loss
-   
+
 def metric_positive_distance(y_true, y_pred):
   N = 3
   beta = N
-  epsilon = 1e-8
+  epsilon = 1e-6
   anchor = y_pred[0::3]
   positive = y_pred[1::3]
-  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 1)
-  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-  #positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
+  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
   return backend.mean(positive_distance)
 
 def metric_negative_distance(y_true, y_pred):
   N = 3
   beta = N
-  epsilon = 1e-8
+  epsilon = 1e-6
   anchor = y_pred[0::3]
   negative = y_pred[2::3]
-  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 1)
-  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
-  #negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
+  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
   return backend.mean(negative_distance)
 
 def train_top_model():
@@ -115,10 +115,10 @@ def train_top_model():
   y_dummie = np.array([1, 1, 0] * (int(nb_train_samples)))
 
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
-  
+
   top_model.fit(train_data, y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
   top_model.save_weights(top_model_weights_path)
-    
+
 if __name__ == '__main__':
   nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
   nb_valid_samples = len(os.listdir(args.valid_dir + "/0")) / 3

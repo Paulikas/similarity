@@ -124,33 +124,42 @@ def train_top_model():
   top_model.save_weights(top_model_weights_path)
 
 def fine_tune_model():
-  train_data = np.load(open('top_model_features_train.npy', 'rb'))
-
   input_tensor = Input(shape = (224, 224, 3))
   vgg16_model = VGG16(include_top = False, weights = 'vgg16_model_weights.h5', input_tensor = input_tensor)
 
+  datagen = ImageDataGenerator()
+  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
+  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
+
   base_model = Model(inputs = vgg16_model.input, outputs = vgg16_model.outputs)
-  base_output = base_model.output
+  #base_output = base_model.output
 
   # Fix or unfix vgg layers for training
   for layer in base_model.layers[0:18]:
     layer.trainable = True
 
-  top_model = Sequential() 
-  top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
-  top_model.add(Dense(64, activation='relu'))
+  top_model = Sequential()
+  top_model.add(Flatten(input_shape = base_model.output_shape[1:]))
+  top_model.add(Dense(64, activation = 'relu'))
   top_model.add(Dropout(0.5))
-  top_model.add(Dense(1, activation='sigmoid'))
+  top_model.add(Dense(1, activation = 'sigmoid'))
 
   top_model.load_weights('top_model_weights.h5')
-  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
+  #top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
   
+  model = Sequential()
+  model.add(base_model)
+  model.add(top_model)
+
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+  
+  #model_features_valid = model.predict_generator(train_generator, nb_train_samples)
 
-  y_dummie = 0 * train_data
+  model.fit_generator(train_generator, nb_train_samples, epochs = 100)
+  #model.fit_generator(generator = train_generator, steps_per_epoch = 300 // args.batch_size, epochs = args.epochs, validation_data = valid_generator, validation_steps = 300 // args.batch_size)
 
-  top_model.fit(x = train_data, y = y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
-  top_model.save_weights(top_model_weights_path)
+  #model.save_weights(top_model_weights_path)
 
 if __name__ == '__main__':
   nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3

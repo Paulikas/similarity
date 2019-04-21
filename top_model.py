@@ -72,9 +72,6 @@ def triplet_loss(y_true, y_pred):
   positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
   negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
 
-  #positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
-  #negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
-
   loss = negative_distance + positive_distance
   return loss
 
@@ -85,8 +82,7 @@ def metric_positive_distance(y_true, y_pred):
   anchor = y_pred[0::3]
   positive = y_pred[1::3]
   positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
-  #positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-  positive_distance = (-tf.divide((positive_distance), beta) + 1 + epsilon)
+  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
   return backend.mean(positive_distance)
 
 def metric_negative_distance(y_true, y_pred):
@@ -96,8 +92,7 @@ def metric_negative_distance(y_true, y_pred):
   anchor = y_pred[0::3]
   negative = y_pred[2::3]
   negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
-  #negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
-  negative_distance = (-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
   return backend.mean(negative_distance)
 
 def train_top_model():

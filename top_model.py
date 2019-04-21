@@ -3,16 +3,20 @@ import numpy as np
 from time import time
 
 from keras import backend, applications, optimizers, losses
-from keras.models import Sequential
-from keras.layers import Input, Dropout, Flatten, Dense
+
+from keras.models import Sequential, Model
+from keras.layers import Input, Dropout, Flatten, Dense, Reshape
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import TensorBoard
+
+from keras.applications import VGG16
 
 from sklearn.metrics import confusion_matrix, mean_squared_error
 
 import os.path
 import argparse
 
+#backend.set_image_dim_ordering('th') 
 tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 print("TensorFlow version: " + tf.__version__)
@@ -44,7 +48,6 @@ def save_features():
   datagen = ImageDataGenerator()
 
   vgg16_model = applications.VGG16(include_top = False, weights = 'imagenet')
-  vgg16_model.summary()
 
   generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = None, shuffle = False)
   #, save_to_dir = 'train_augmented')
@@ -99,21 +102,52 @@ def metric_negative_distance(y_true, y_pred):
   negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
   return backend.mean(negative_distance)
 
+def make_top_model(input_shape):
+  top_model = Sequential()
+  top_model.add(Flatten(input_shape = input_shape))
+  top_model.add(Dense(64, activation = 'relu'))
+  top_model.add(Dropout(0.5))
+  top_model.add(Dense(1, activation = 'sigmoid'))
+  return top_model
+
 def train_top_model():
   train_data = np.load(open('top_model_features_train.npy', 'rb'))
   valid_data = np.load(open('top_model_features_valid.npy', 'rb'))
 
-  top_model = Sequential()
-  top_model.add(Flatten(input_shape = train_data.shape[1:]))
-  top_model.add(Dense(64, activation = 'relu'))
-  top_model.add(Dropout(0.5))
-  top_model.add(Dense(1, activation = 'sigmoid'))
-
-
+  top_model = make_top_model(train_data.shape[1:])
   top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
   y_dummie = 0 * train_data
 
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+
+  top_model.fit(x = train_data, y = y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
+  top_model.save_weights(top_model_weights_path)
+
+def fine_tune_model():
+  train_data = np.load(open('top_model_features_train.npy', 'rb'))
+
+  input_tensor = Input(shape = (224, 224, 3))
+  vgg16_model = VGG16(include_top = False, weights = 'vgg16_model_weights.h5', input_tensor = input_tensor)
+
+  base_model = Model(inputs = vgg16_model.input, outputs = vgg16_model.outputs)
+  base_output = base_model.output
+
+  # Fix or unfix vgg layers for training
+  for layer in base_model.layers[0:18]:
+    layer.trainable = True
+
+  top_model = Sequential() 
+  top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
+  top_model.add(Dense(64, activation='relu'))
+  top_model.add(Dropout(0.5))
+  top_model.add(Dense(1, activation='sigmoid'))
+
+  top_model.load_weights('top_model_weights.h5')
+  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
+  
+  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+
+  y_dummie = 0 * train_data
 
   top_model.fit(x = train_data, y = y_dummie, epochs = args.epochs, batch_size = args.batch_size, shuffle = False, verbose = 1, callbacks = [tensorboard])
   top_model.save_weights(top_model_weights_path)
@@ -125,7 +159,8 @@ if __name__ == '__main__':
     if args.w or not (os.path.isfile(train_features_file) and os.path.isfile(valid_features_file)):
       print("Writing features")
       save_features()
-    train_top_model()
+    #train_top_model()
+    fine_tune_model()
   else:
     print("Dataset images were not found")
 

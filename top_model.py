@@ -18,20 +18,13 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 print("TensorFlow version: " + tf.__version__)
 
-parser = argparse.ArgumentParser(description='Build a top layer for the similarity training and train it.')
-parser.add_argument('-w', '--overwrite', dest="w",
-                    action='store_true', help="Overwrite initial feature embeddings")
-parser.add_argument('-t', '--train-dir', dest='train_dir',
-                    default="/opt/datasets/data/simulated_flight_1/train/",
-                    help='Path to dataset training directory')
-parser.add_argument('-v', '--valid-dir', dest='valid_dir',
-                    default="/opt/datasets/data/simulated_flight_1/valid/",
-                    help='Path to dataset validation directory')
-parser.add_argument('-e', '--epochs', dest='epochs', type=int,
-                    default=5, help='Number of epochs to train the model')
-parser.add_argument('-b', '--batch-size', dest='batch_size', type=int,
-                    default=3, help='Batch size')
-
+parser = argparse.ArgumentParser(description = 'Build a top layer for the similarity training and train it.')
+parser.add_argument('-w', '--overwrite', dest = 'w', action = 'store_true', help = 'Overwrite initial feature embeddings.')
+parser.add_argument('-f', '--fine-tune', dest = 'fine_tune', action = 'store_true', help = 'Fine tune model.')
+parser.add_argument('-t', '--train-dir', dest = 'train_dir', default = '/opt/datasets/data/simulated_flight_1/train/', help = 'Path to dataset training directory.')
+parser.add_argument('-v', '--valid-dir', dest = 'valid_dir', default = '/opt/datasets/data/simulated_flight_1/valid/', help = 'Path to dataset validation directory.')
+parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
+parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
 args = parser.parse_args()
 
 top_model_weights_path = 'top_model_weights.h5'

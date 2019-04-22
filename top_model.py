@@ -31,7 +31,7 @@ args = parser.parse_args()
 
 model_weights_path = 'model_weights.h5'
 
-def triplet_loss(N = 9, epsilon = 1e-6):
+def triplet_loss(N = 1, epsilon = 1e-6):
   def triplet_loss(y_true, y_pred):
     beta = N
 
@@ -51,7 +51,7 @@ def triplet_loss(N = 9, epsilon = 1e-6):
   return triplet_loss
 
 def metric_positive_distance(y_true, y_pred):
-  N = 9
+  N = 1
   beta = N
   epsilon = 1e-6
   anchor = y_pred[0::3]
@@ -61,7 +61,7 @@ def metric_positive_distance(y_true, y_pred):
   return backend.mean(positive_distance)
 
 def metric_negative_distance(y_true, y_pred):
-  N = 9
+  N = 1
   beta = N
   epsilon = 1e-6
   anchor = y_pred[0::3]
@@ -130,23 +130,46 @@ def train_model():
      layer.trainable = True
   
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
-  model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
+  results = model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
   
+  print(results.history)
 
   model.save_weights(model_weights_path)
 
 def test_model():
   datagen = ImageDataGenerator()
-  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
-  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
+  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
+  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
 
   model = make_model()
   model.load_weights(model_weights_path)
 
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
-  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
-  results = model.predict_generator(generator = valid_generator, steps = 315 / 3, verbose = 0)
-  print(results)
+
+
+  print(model.metrics_names)
+  results = model.predict_generator(generator = valid_generator, steps = 100, verbose = 0)
+  
+ 
+  N = 1
+  beta = N
+  epsilon = 1e-6
+  anchor = results[0::3]
+  positive = results[1::3]
+  negative = results[2::3]
+  
+
+  positive_distance = np.sum(np.square(anchor - positive), axis = 1)
+  negative_distance = np.sum(np.square(anchor - negative), axis = 1)
+
+  # -ln(-x/N+1)
+  positive_distance = - np.log(- (positive_distance / beta) + 1 + epsilon)
+  negative_distance = - np.log(-(N - negative_distance / beta) + 1 + epsilon)
+
+  
+
+  print(np.concatenate((positive_distance[np.newaxis].transpose(), negative_distance[np.newaxis].transpose()), axis = 1))
+  
 
 if __name__ == '__main__':
   if args.train_model:

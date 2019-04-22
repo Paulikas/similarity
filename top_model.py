@@ -29,6 +29,7 @@ args = parser.parse_args()
 
 top_model_weights_path = 'top_model_weights.h5'
 vgg16_model_weights_path = 'vgg16_model_weights.h5'
+model_weights_path = 'model_weights.h5'
 train_features_file = 'top_model_features_train.npy'
 valid_features_file = 'top_model_features_valid.npy'
 
@@ -126,12 +127,9 @@ def fine_tune_model():
   model.add(top_model)
 
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
-  
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
-  
-  model.fit_generator(train_generator, nb_train_samples, epochs = 100)
-  
-  #model.save_weights(top_model_weights_path)
+  model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
+  model.save_weights(model_weights_path)
 
 if __name__ == '__main__':
   nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
@@ -140,7 +138,11 @@ if __name__ == '__main__':
     if args.w or not (os.path.isfile(train_features_file) and os.path.isfile(valid_features_file)):
       print("Writing features")
       save_features()
-    #train_top_model()
-    fine_tune_model()
+
+    if args.fine_tune:
+      fine_tune_model()
+    else:
+      train_top_model()
+    
   else:
     print("Dataset images were not found")

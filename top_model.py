@@ -25,6 +25,7 @@ parser.add_argument('-t', '--train-dir', dest = 'train_dir', default = '/opt/dat
 parser.add_argument('-v', '--valid-dir', dest = 'valid_dir', default = '/opt/datasets/data/simulated_flight_1/valid/', help = 'Path to dataset validation directory.')
 parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
 parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
+parser.add_argument('-s', '--similarity-compute', dest = 'similarity_compute', action = 'store_true', help = 'Compute similarities.')
 args = parser.parse_args()
 
 top_model_weights_path = 'top_model_weights.h5'
@@ -93,6 +94,22 @@ def make_top_model(input_shape):
   top_model.add(Dense(1, activation = 'sigmoid'))
   return top_model
 
+def make_model():
+  input_tensor = Input(shape = (224, 224, 3))
+  vgg16_model = VGG16(include_top = False, weights = 'vgg16_model_weights.h5', input_tensor = input_tensor)
+
+  base_model = Model(inputs = vgg16_model.input, outputs = vgg16_model.outputs)
+  for layer in base_model.layers[0:18]:
+    layer.trainable = True
+
+  top_model = make_top_model(base_model.output_shape[1:])
+  top_model.load_weights('top_model_weights.h5')
+
+  model = Sequential()
+  model.add(base_model)
+  model.add(top_model)
+  return model
+
 def train_top_model():
   train_data = np.load(open('top_model_features_train.npy', 'rb'))
   valid_data = np.load(open('top_model_features_valid.npy', 'rb'))
@@ -107,29 +124,29 @@ def train_top_model():
   top_model.save_weights(top_model_weights_path)
 
 def fine_tune_model():
-  input_tensor = Input(shape = (224, 224, 3))
-  vgg16_model = VGG16(include_top = False, weights = 'vgg16_model_weights.h5', input_tensor = input_tensor)
-
   datagen = ImageDataGenerator()
   train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
   valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
 
-  base_model = Model(inputs = vgg16_model.input, outputs = vgg16_model.outputs)
-  
-  for layer in base_model.layers[0:18]:
-    layer.trainable = True
-
-  top_model = make_top_model(base_model.output_shape[1:])
-  top_model.load_weights('top_model_weights.h5')
-
-  model = Sequential()
-  model.add(base_model)
-  model.add(top_model)
+  model = make_model()
 
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
   model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
   model.save_weights(model_weights_path)
+
+def test_images():
+  datagen = ImageDataGenerator()
+  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
+  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'binary', shuffle = False)
+
+  model = make_model()
+  model.load_weights(model_weights_path)
+
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
+  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+  results = model.predict_generator(generator = valid_generator, steps = 315 / 3, verbose = 0)
+  print(results)
 
 if __name__ == '__main__':
   nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
@@ -141,6 +158,8 @@ if __name__ == '__main__':
 
     if args.fine_tune:
       fine_tune_model()
+    elif args.similarity_compute:
+      test_images()
     else:
       train_top_model()
     

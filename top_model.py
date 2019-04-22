@@ -20,12 +20,13 @@ print("TensorFlow version: " + tf.__version__)
 
 parser = argparse.ArgumentParser(description = 'Build a top layer for the similarity training and train it.')
 parser.add_argument('-w', '--overwrite', dest = 'w', action = 'store_true', help = 'Overwrite initial feature embeddings.')
+parser.add_argument('-m', '--train-top-model', dest = 'top_model', action = 'store_true', help = 'Train top model')
 parser.add_argument('-f', '--fine-tune', dest = 'fine_tune', action = 'store_true', help = 'Fine tune model.')
+parser.add_argument('-s', '--similarity-compute', dest = 'similarity_compute', action = 'store_true', help = 'Compute similarities.')
+parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
+parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
 parser.add_argument('-t', '--train-dir', dest = 'train_dir', default = '/opt/datasets/data/simulated_flight_1/train/', help = 'Path to dataset training directory.')
 parser.add_argument('-v', '--valid-dir', dest = 'valid_dir', default = '/opt/datasets/data/simulated_flight_1/valid/', help = 'Path to dataset validation directory.')
-parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
-parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
-parser.add_argument('-s', '--similarity-compute', dest = 'similarity_compute', action = 'store_true', help = 'Compute similarities.')
 args = parser.parse_args()
 
 top_model_weights_path = 'top_model_weights.h5'
@@ -131,8 +132,11 @@ def fine_tune_model():
   model = make_model()
 
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
-  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
-  model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
+
+  if args.epochs > 0:
+    tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+    model.fit_generator(train_generator, nb_train_samples, epochs = args.epochs)
+
   model.save_weights(model_weights_path)
 
 def test_images():
@@ -149,19 +153,27 @@ def test_images():
   print(results)
 
 if __name__ == '__main__':
-  nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
-  nb_valid_samples = len(os.listdir(args.valid_dir + "/0")) / 3
-  if nb_train_samples > 0 and nb_valid_samples > 0:
-    if args.w or not (os.path.isfile(train_features_file) and os.path.isfile(valid_features_file)):
-      print("Writing features")
-      save_features()
-
-    if args.fine_tune:
-      fine_tune_model()
-    elif args.similarity_compute:
-      test_images()
-    else:
-      train_top_model()
-    
+  if args.w:
+    nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
+    nb_valid_samples = len(os.listdir(args.valid_dir + "/0")) / 3
+    print('Writing features')
+    save_features()
+  elif args.fine_tune:
+    nb_train_samples = len(os.listdir(args.train_dir + "/0")) / 3
+    print('Fine tuning model')
+    fine_tune_model()
+  elif args.similarity_compute:
+    test_images()
+  elif args.top_model:
+    print('Training top model')
+    train_top_model()
   else:
-    print("Dataset images were not found")
+    print('Usage:\n \
+      step 1: run with parameter -w to get embeddings\n \
+      step 2: run with parameter -m to train top model\n \
+      step 3: run with parameter -f to fine-tune whole model\n \
+      step 4: run with parameter -s to compute similarities\n \
+      use -e to set epochs and -b to set batch size\n \
+      use -t and -w to set train and validation data paths.')
+    
+  

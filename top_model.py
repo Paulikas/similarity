@@ -52,24 +52,24 @@ def save_features():
   np.save(open(valid_features_file, 'wb'), top_model_features_valid)
   vgg16_model.save_weights(vgg16_model_weights_path)
 
-def triplet_loss(y_true, y_pred):
-  N = 3
-  beta = N
-  epsilon = 1e-6
+def triplet_loss(N = 3, epsilon = 1e-6):
+  def triplet_loss(y_true, y_pred):
+    beta = N
 
-  anchor = y_pred[0::3]
-  positive = y_pred[1::3]
-  negative = y_pred[2::3]
+    anchor = y_pred[0::3]
+    positive = y_pred[1::3]
+    negative = y_pred[2::3]
 
-  positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
-  negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
+    positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
+    negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
 
-  # -ln(-x/N+1)
-  positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-  negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    # -ln(-x/N+1)
+    positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+    negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
 
-  loss = negative_distance + positive_distance
-  return loss
+    loss = negative_distance + positive_distance
+    return loss
+  return triplet_loss
 
 def metric_positive_distance(y_true, y_pred):
   N = 3
@@ -104,7 +104,7 @@ def train_top_model():
   valid_data = np.load(open('top_model_features_valid.npy', 'rb'))
 
   top_model = make_top_model(train_data.shape[1:])
-  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
+  top_model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
   y_dummie = 0 * train_data
 
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
@@ -132,7 +132,7 @@ def fine_tune_model():
   model.add(base_model)
   model.add(top_model)
 
-  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss, metrics = [metric_positive_distance, metric_negative_distance])
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [metric_positive_distance, metric_negative_distance])
   
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
   

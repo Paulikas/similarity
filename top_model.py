@@ -135,14 +135,17 @@ def test_model():
   epsilon = 1e-6
   anchor = results[0::3]
   positive = results[1::3]
+  negative = results[2::3]
   
   positive_distance = np.nansum(np.square(anchor - positive), axis = 1)
-  
-  # -ln(-x/N+1)
   positive_distance = - np.log(- (positive_distance / beta) + 1 + epsilon)
+
+  positive_distance2 = np.nansum(np.square(anchor - negative), axis = 1)
+  positive_distance2 = - np.log(- (positive_distance2 / beta) + 1 + epsilon)
   
   for i in range(test_samples // 3):
-    print(i, np.nansum(positive_distance[i]))
+    print(i, 'p ', np.nansum(positive_distance[i]))
+    print(i, 'n ', np.nansum(positive_distance2[i]))
   
 if __name__ == '__main__':
   if args.train_model:

@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 from time import time
 
+from PIL import Image
+
 from keras import backend, applications, optimizers
 
 from keras.models import Model
@@ -152,6 +154,17 @@ def test_model():
   positive = results[1::3]
   negative = results[2::3]
   
+  I = anchor[6][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save('testa.png')
+  I = positive[6][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save('testp.png')
+  I = negative[6][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save('testn.png')
+
+
   positive_distance = np.nansum(np.square(anchor - positive), axis = 1)
   positive_distance = - np.log(- (positive_distance / beta) + 1 + epsilon)
 

@@ -9,6 +9,8 @@ from keras.layers import Input, Dropout, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import TensorBoard
 
+from keras.callbacks import Callback
+
 import os.path
 import argparse
 
@@ -90,10 +92,17 @@ def make_model():
   
   model = Model(inputs = base_model.input, outputs = pred)
 
-  #for i, layer in enumerate(model.layers):
-  #  print(i, layer.name)
-
   return model
+
+class EarlyStop(Callback):
+  def on_batch_end(self, batch, logs = {}):
+    if logs.get('loss') <= 1.0:
+      self.model.stop_training = True
+
+class EarlyStop2(Callback):
+  def on_batch_end(self, batch, logs = {}):
+    if logs.get('loss') <= 1.0:
+      self.model.stop_training = True
 
 def train_model():
   datagen = ImageDataGenerator()
@@ -110,12 +119,18 @@ def train_model():
   # Therefore, we compute the steps_per_epoch value as the total number of training data points divided by the batch size.
   # Once Keras hits this step count it knows that it’s a new epoch.
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = 30, epochs = args.epochs, validation_data = valid_generator, validation_steps = 30)
+  early_stop = EarlyStop()
 
-  #for layer in model.layers[:4]:
-  #   layer.trainable = False
-  #for layer in model.layers[4:]:
-  #   layer.trainable = True
+  model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
+
+  for layer in model.layers[:4]:
+     layer.trainable = False
+  for layer in model.layers[4:]:
+     layer.trainable = True
+  
+  early_stop = EarlyStop2()
+
+  model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
   
   model.save_weights(model_weights_path)
 

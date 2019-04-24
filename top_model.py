@@ -147,23 +147,12 @@ def test_model():
 
   results = model.predict_generator(generator = test_generator, steps = 1, verbose = 0)
  
-  N = 1
+  N = 9
   beta = N
   epsilon = 1e-6
   anchor = results[0::3]
   positive = results[1::3]
   negative = results[2::3]
-  
-  I = anchor[6][0]
-  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-  img.save('testa.png')
-  I = positive[6][0]
-  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-  img.save('testp.png')
-  I = negative[6][0]
-  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-  img.save('testn.png')
-
 
   positive_distance = np.nansum(np.square(anchor - positive), axis = 1)
   positive_distance = - np.log(- (positive_distance / beta) + 1 + epsilon)
@@ -171,10 +160,21 @@ def test_model():
   positive_distance2 = np.nansum(np.square(anchor - negative), axis = 1)
   positive_distance2 = - np.log(- (positive_distance2 / beta) + 1 + epsilon)
   
+  
   for i in range(test_samples // 3):
     print(i, 'p ', np.nansum(positive_distance[i]))
     print(i, 'n ', np.nansum(positive_distance2[i]))
+    #I = anchor[i][0]
+    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+    #img.save(f'img/{i:03}testa.png')
+    #I = positive[i][0]
+    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+    #img.save(f'img/{i:03}testp.png')
+    #I = negative[i][0]
+    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+    #img.save(f'img/{i:03}testn.png')
   
+
 if __name__ == '__main__':
   if args.train_model:
     train_model()

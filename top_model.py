@@ -161,9 +161,20 @@ def test_model():
   positive_distance2 = - np.log(- (positive_distance2 / beta) + 1 + epsilon)
   
   
+  tp = 0
+  fp = 0
+
   for i in range(test_samples // 3):
-    print(i, 'p ', np.nansum(positive_distance[i]))
-    print(i, 'n ', np.nansum(positive_distance2[i]))
+    pda = np.nansum(positive_distance[i])
+    nda = np.nansum(positive_distance2[i])
+    if pda > nda:
+      fp += 1
+    else:
+      tp += 1
+  print('acc: ', np.round(tp / (tp + fp) * 100, 1))
+  
+    #print(i, 'p ', np.nansum(positive_distance[i]))
+    #print(i, 'n ', np.nansum(positive_distance2[i]))
     #I = anchor[i][0]
     #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
     #img.save(f'img/{i:03}testa.png')

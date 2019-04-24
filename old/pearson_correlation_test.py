@@ -20,7 +20,6 @@ for filename in all_files:
   elif triplet == 2:
     file_c = filename
   elif triplet == 3:
-    #print(filename)
     template = cv2.imread(file_a)
     img_b = cv2.imread(file_b)
     img_c = cv2.imread(file_c)
@@ -48,11 +47,11 @@ for filename in all_files:
 
 r = np.array(r)
 
-print(r)
-
 a = (r[:, 0] - r[:, 1])
 b = (r[:, 0] - r[:, 1])
 
-print(np.sum(np.array(a) >= 0, axis=0))
-print(np.sum(np.array(b) < 0, axis=0))
+neg = np.sum(np.array(a) >= 0, axis=0)
+pos = np.sum(np.array(b) <= 0, axis=0)
+
+print('acc :', np.round(pos / (pos + neg) * 100, 1), '%')
 

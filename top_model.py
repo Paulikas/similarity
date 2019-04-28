@@ -24,6 +24,8 @@ parser = argparse.ArgumentParser(description = 'Build a top layer for the simila
 parser.add_argument('-r', '--train-model', dest = 'train_model', action = 'store_true')
 parser.add_argument('-s', '--test-model', dest = 'test_model', action = 'store_true')
 
+parser.add_argument('-l', '--lc', dest = 'lc', type = int, default = 0)
+
 parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
 parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
 parser.add_argument('-t', '--train-dir', dest = 'train_dir', default = '/opt/datasets/data/simulated_flight_1/train/', help = 'Path to dataset training directory.')
@@ -34,7 +36,7 @@ args = parser.parse_args()
 
 model_weights_path = 'model_weights.h5'
 
-def triplet_loss(N = 9, epsilon = 1e-6):
+def triplet_loss(N = 64, epsilon = 1e-6):
   def triplet_loss(y_true, y_pred):
     beta = N
 
@@ -53,7 +55,7 @@ def triplet_loss(N = 9, epsilon = 1e-6):
     return loss
   return triplet_loss
 
-def pd(N = 9, epsilon = 1e-6):
+def pd(N = 64, epsilon = 1e-6):
   def pd(y_true, y_pred):
     beta = N
     anchor = y_pred[0::3]
@@ -63,7 +65,7 @@ def pd(N = 9, epsilon = 1e-6):
     return backend.mean(positive_distance)
   return pd
 
-def nd(N = 9, epsilon = 1e-06):
+def nd(N = 64, epsilon = 1e-06):
   def nd(y_true, y_pred):
     beta = N
     anchor = y_pred[0::3]
@@ -81,8 +83,8 @@ def make_model():
   base_model = applications.VGG16(include_top = False, weights = 'imagenet', input_tensor = input_tensor)
   x = base_model.output
 
-  #for i in range(8):  
-  #  base_model.layers.pop()
+  for i in range(args.lc):  
+    base_model.layers.pop()
   
   for layer in base_model.layers:
     layer.trainable = False
@@ -116,14 +118,9 @@ def train_model():
 
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
 
-  # Keras data generator is meant to loop infinitely — it should never return or exit.
-  # Keras has no ability to determine when one epoch starts and a new epoch begins.
-  # Therefore, we compute the steps_per_epoch value as the total number of training data points divided by the batch size.
-  # Once Keras hits this step count it knows that it’s a new epoch.
-
   early_stop = EarlyStop()
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
+  model.fit_generator(generator = train_generator, steps_per_epoch = 64, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard, early_stop])
 
   for layer in model.layers[:4]:
      layer.trainable = False
@@ -132,7 +129,7 @@ def train_model():
   
   early_stop = EarlyStop2()
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
+  #model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
   
   model.save_weights(model_weights_path)
 
@@ -147,7 +144,7 @@ def test_model():
 
   results = model.predict_generator(generator = test_generator, steps = 1, verbose = 0)
  
-  N = 9
+  N = 64
   beta = N
   epsilon = 1e-6
   anchor = results[0::3]
@@ -159,32 +156,39 @@ def test_model():
 
   positive_distance2 = np.nansum(np.square(anchor - negative), axis = 1)
   positive_distance2 = - np.log(- (positive_distance2 / beta) + 1 + epsilon)
-  
-  
+ 
   tp = 0
   fp = 0
+  pneq = 0
 
   for i in range(test_samples // 3):
     pda = np.nansum(positive_distance[i])
     nda = np.nansum(positive_distance2[i])
-    if pda > nda:
+    print(pda, ", ", nda)
+    if pda >= nda:
+    # print(i)
       fp += 1
     else:
       tp += 1
-  print('acc: ', np.round(tp / (tp + fp) * 100, 1))
+    if pda == nda:
+      pneq += 1
+
+  print('accuracy: ', np.round(tp / (tp + fp) * 100, 1))
+  print('equal predictions: ', pneq)
   
-    #print(i, 'p ', np.nansum(positive_distance[i]))
-    #print(i, 'n ', np.nansum(positive_distance2[i]))
-    #I = anchor[i][0]
-    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-    #img.save(f'img/{i:03}testa.png')
-    #I = positive[i][0]
-    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-    #img.save(f'img/{i:03}testp.png')
-    #I = negative[i][0]
-    #img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
-    #img.save(f'img/{i:03}testn.png')
-  
+  '''
+  print(i, 'p ', np.nansum(positive_distance[i]))
+  print(i, 'n ', np.nansum(positive_distance2[i]))
+  I = anchor[i][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save(f'img/{i:03}testa.png')
+  I = positive[i][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save(f'img/{i:03}testp.png')
+  I = negative[i][0]
+  img = Image.fromarray(np.array( (((I - I.min()) / (I.max() - I.min())) * 255.9), dtype=np.uint8))
+  img.save(f'img/{i:03}testn.png')
+  '''
 
 if __name__ == '__main__':
   if args.train_model:

@@ -6,7 +6,7 @@ from PIL import Image
 
 from keras import backend, applications, optimizers
 
-from keras.models import Model
+from keras.models import Model, Sequential
 from keras.layers import Input, Dropout, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import TensorBoard
@@ -36,7 +36,9 @@ args = parser.parse_args()
 
 model_weights_path = 'model_weights.h5'
 
-def triplet_loss(N = 64, epsilon = 1e-6):
+argN = 64
+
+def triplet_loss(N = argN, epsilon = 1e-6):
   def triplet_loss(y_true, y_pred):
     beta = N
 
@@ -55,7 +57,7 @@ def triplet_loss(N = 64, epsilon = 1e-6):
     return loss
   return triplet_loss
 
-def pd(N = 64, epsilon = 1e-6):
+def pd(N = argN, epsilon = 1e-6):
   def pd(y_true, y_pred):
     beta = N
     anchor = y_pred[0::3]
@@ -65,7 +67,7 @@ def pd(N = 64, epsilon = 1e-6):
     return backend.mean(positive_distance)
   return pd
 
-def nd(N = 64, epsilon = 1e-06):
+def nd(N = argN, epsilon = 1e-06):
   def nd(y_true, y_pred):
     beta = N
     anchor = y_pred[0::3]
@@ -79,22 +81,38 @@ def make_top_model(input_shape):
   return top_model
 
 def make_model():
-  input_tensor = Input(shape = (224, 224, 3))
-  base_model = applications.VGG16(include_top = False, weights = 'imagenet', input_tensor = input_tensor)
+  #input_tensor = Input(shape = (224, 224, 3))
+  base_model = applications.VGG16(include_top = False, weights = 'imagenet')#, input_tensor = input_tensor)
   x = base_model.output
 
-  for i in range(args.lc):  
-    base_model.layers.pop()
+  #for i in range(args.lc):  
+  #  base_model.layers.pop()
   
-  for layer in base_model.layers:
+  #for layer in base_model.layers:
+  #  layer.trainable = False
+
+  model = Sequential()
+  if args.lc > 0:
+    for layer in base_model.layers[:-1 * args.lc]:
+      model.add(layer)
+  else:
+    for layer in base_model.layers:
+      model.add(layer)
+  
+  for layer in model.layers:
     layer.trainable = False
 
+  '''
   #x = Flatten()(x) # shape(1)
   x = Dense(7, activation = 'sigmoid')(x) # shape(1, 7 , 64)
   x = Dropout(0.5)(x)
   pred = Dense(64, activation = 'sigmoid')(x)
   
   model = Model(inputs = base_model.input, outputs = pred)
+  '''
+  model.add(Dense(64, activation = 'sigmoid', input_shape = (224, 224, 3)))
+  model.add(Dropout(0.5))
+  model.add(Dense(7, activation = 'sigmoid'))
 
   return model
 
@@ -109,27 +127,28 @@ class EarlyStop2(Callback):
       self.model.stop_training = True
 
 def train_model():
+  model = make_model()
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
+
+  model.summary()
+
   datagen = ImageDataGenerator()
   train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
   valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
 
-  model = make_model()
-  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
-
   tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
+  #early_stop = EarlyStop()
 
-  early_stop = EarlyStop()
+  model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard])
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = 64, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard, early_stop])
-
-  for layer in model.layers[:4]:
-     layer.trainable = False
-  for layer in model.layers[4:]:
-     layer.trainable = True
+  #for layer in model.layers[:4]:
+  #   layer.trainable = False
+  #for layer in model.layers[4:]:
+  #   layer.trainable = True
   
-  early_stop = EarlyStop2()
+  #early_stop = EarlyStop2()
 
-  #model.fit_generator(generator = train_generator, steps_per_epoch = 9, epochs = args.epochs, validation_data = valid_generator, validation_steps = 6, callbacks = [tensorboard, early_stop])
+  #model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = 3000, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard, early_stop])
   
   model.save_weights(model_weights_path)
 
@@ -144,7 +163,7 @@ def test_model():
 
   results = model.predict_generator(generator = test_generator, steps = 1, verbose = 0)
  
-  N = 64
+  N = argN
   beta = N
   epsilon = 1e-6
   anchor = results[0::3]
@@ -164,7 +183,7 @@ def test_model():
   for i in range(test_samples // 3):
     pda = np.nansum(positive_distance[i])
     nda = np.nansum(positive_distance2[i])
-    print(pda, ", ", nda)
+    print(pda, "\t", nda)
     if pda >= nda:
     # print(i)
       fp += 1

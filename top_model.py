@@ -25,6 +25,7 @@ parser.add_argument('-r', '--train-model', dest = 'train_model', action = 'store
 parser.add_argument('-s', '--test-model', dest = 'test_model', action = 'store_true')
 
 parser.add_argument('-l', '--lc', dest = 'lc', type = int, default = 0)
+parser.add_argument('-i', '--ic', dest = 'ic', type = int, default = 0)
 
 parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
 parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
@@ -146,9 +147,12 @@ def train_model():
   #for layer in model.layers[4:]:
   #   layer.trainable = True
   
+  #for layer in model.layers:
+  #   layer.trainable = True
+  
   #early_stop = EarlyStop2()
 
-  #model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = 3000, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard, early_stop])
+  #model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.ic, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard])
   
   model.save_weights(model_weights_path)
 
@@ -179,6 +183,10 @@ def test_model():
   tp = 0
   fp = 0
   pneq = 0
+  min_p = 10000
+  max_p = 0
+  min_n = 10000
+  max_n = 0
 
   for i in range(test_samples // 3):
     pda = np.nansum(positive_distance[i])
@@ -192,8 +200,19 @@ def test_model():
     if pda == nda:
       pneq += 1
 
-  print('accuracy: ', np.round(tp / (tp + fp) * 100, 1))
-  print('equal predictions: ', pneq)
+    if min_p > pda:
+      min_p = pda
+    if max_p < pda:
+      max_p = pda
+
+    if min_n > nda:
+      min_n = nda
+    if max_n < nda:
+      max_n = nda
+
+  print(min_p, ' - ', max_p, ', ', min_n, ' - ', max_n)
+  #print('accuracy: ', np.round(tp / (tp + fp) * 100, 1))
+  #print('equal predictions: ', pneq)
   
   '''
   print(i, 'p ', np.nansum(positive_distance[i]))

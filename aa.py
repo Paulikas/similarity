@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
-with open('pc') as csv_file:
+with open('ass') as csv_file:
   csv_reader = csv.reader(csv_file, delimiter='\t')
   p = []
   n = []
@@ -33,19 +33,19 @@ fig = plt.figure(figsize=(8, 3))
 ax = fig.add_subplot(1, 1, 1)
 major_ticks = np.arange(0, 1280, 64)
 #y_ticks = [0, 55, 110]
-y_ticks = [0.8, 1]
+y_ticks = [-0.4, 0.8]
 ax.set_xticks(major_ticks)
 ax.set_yticks(y_ticks)
 ax.grid(which='both')
 ax.set_xlim(0, 1216)
-ax.set_ylim(0.79, 1.01)
+ax.set_ylim(-0.45, 0.85)
 
 plt.xticks(rotation='vertical')
 
 plt.xlabel('sample', fontdict=font)
 plt.ylabel('correlation', fontdict=font)
-plt.text(1218, 0.91, 'anchor to \n negative', fontdict=font1)
-plt.text(1218, 0.845, 'anchor to \n positive', fontdict=font2)
+plt.text(1218, -0.2, 'anchor to \n negative', fontdict=font1)
+plt.text(1218, 0.1, 'anchor to \n positive', fontdict=font2)
 
 plt.plot(p, linestyle="",marker="+")
 

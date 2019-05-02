@@ -173,7 +173,8 @@ def test_model():
   anchor = results[0::3]
   positive = results[1::3]
   negative = results[2::3]
-
+  print(anchor.shape)
+  sys.exit()
   positive_distance = np.nansum(np.square(anchor - positive), axis = 1)
   positive_distance = - np.log(- (positive_distance / beta) + 1 + epsilon)
 

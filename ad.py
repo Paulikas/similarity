@@ -38,6 +38,9 @@ ax.set_yticks(y_ticks)
 ax.grid(which='both')
 ax.set_xlim(0, 1216)
 #ax.set_ylim(0.79, 1.01)
+ax.xaxis.set_label_coords(0.05, -0.2)
+ax.yaxis.set_label_coords(-0.05, 0.5)
+
 
 plt.xticks(rotation='vertical')
 

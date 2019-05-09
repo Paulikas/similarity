@@ -7,8 +7,8 @@ with open('res50y') as csv_file:
   p = []
   n = []
   for row in csv_reader:
-    p.append(float(row[0].strip()))
-    n.append(float(row[1].strip()))
+    p.append(float(row[0].strip()) / (56*7))
+    n.append(float(row[1].strip()) / (56*7))
 
 #p = (p / np.linalg.norm(p))
 #n = (n / np.linalg.norm(n))
@@ -32,7 +32,7 @@ font2 = {'family': 'serif',
 fig = plt.figure(figsize=(8, 3))
 ax = fig.add_subplot(1, 1, 1)
 major_ticks = np.arange(0, 1280, 64)
-y_ticks = [-20, 750]
+y_ticks = [0, 1.9]
 ax.set_xticks(major_ticks)
 ax.set_yticks(y_ticks)
 ax.grid(which='both')

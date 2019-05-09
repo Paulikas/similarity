@@ -1,22 +1,20 @@
 import tensorflow as tf
 import numpy as np
-from time import time
 
+from time import time
 from PIL import Image
 
-from keras import backend, applications, optimizers
-
-from keras.models import Model, Sequential
-from keras.layers import Input, Dropout, Flatten, Dense
-from keras.preprocessing.image import ImageDataGenerator
-from keras.callbacks import TensorBoard
-
-from keras.callbacks import Callback
+from tensorflow.keras import backend, applications, optimizers
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Input, Dropout, Flatten, Dense
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.callbacks import TensorBoard
 
 import os.path
 import argparse
 
-tf.logging.set_verbosity(tf.logging.ERROR)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 print("TensorFlow version: " + tf.__version__)
 
@@ -47,12 +45,12 @@ def triplet_loss(N = argN, epsilon = 1e-6):
     positive = y_pred[1::3]
     negative = y_pred[2::3]
 
-    positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), axis = 0, keepdims = True)
-    negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), axis = 0, keepdims = True)
+    positive_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, positive)), axis = 0, keepdims = True)
+    negative_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, negative)), axis = 0, keepdims = True)
 
     # -ln(-x/N+1)
-    positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-    negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    positive_distance = -tf.math.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+    negative_distance = -tf.math.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
 
     loss = negative_distance + positive_distance
     return loss
@@ -63,8 +61,8 @@ def pd(N = argN, epsilon = 1e-6):
     beta = N
     anchor = y_pred[0::3]
     positive = y_pred[1::3]
-    positive_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, positive)), 0)
-    positive_distance = -tf.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+    positive_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, positive)), axis=0)
+    positive_distance = -tf.math.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
     return backend.mean(positive_distance)
   return pd
 
@@ -73,8 +71,8 @@ def nd(N = argN, epsilon = 1e-06):
     beta = N
     anchor = y_pred[0::3]
     negative = y_pred[2::3]
-    negative_distance = tf.reduce_sum(tf.square(tf.subtract(anchor, negative)), 0)
-    negative_distance = -tf.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    negative_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, negative)), axis=0)
+    negative_distance = -tf.math.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
     return backend.mean(negative_distance)
   return nd
 
@@ -82,9 +80,8 @@ def make_top_model(input_shape):
   return top_model
 
 def make_model():
-  input_tensor = Input(shape = (224, 224, 3), name = 'input')
-  base_model = applications.VGG16(include_top = False, weights = 'imagenet', input_tensor = input_tensor)
-  #x = base_model.output
+  #input_tensor = Input(shape = (224, 224, 3), name = 'input')
+  base_model = applications.VGG16(include_top = False, weights = 'imagenet') #, input_tensor = input_tensor)
 
   #for i in range(args.lc):  
   #  base_model.layers.pop()
@@ -103,85 +100,28 @@ def make_model():
   for layer in model.layers:
     layer.trainable = False
 
-  '''
-  #x = Flatten()(x) # shape(1)
-  x = Dense(7, activation = 'sigmoid')(x) # shape(1, 7 , 64)
-  x = Dropout(0.5)(x)
-  pred = Dense(64, activation = 'sigmoid')(x)
-  
-  model = Model(inputs = base_model.input, outputs = pred)
-  '''
-  #model.add(Dense(64, activation = 'sigmoid', input_shape = (224, 224, 3)))
   model.add(Dense(64, activation = 'sigmoid', input_shape = (1, 28, 28, 256)))
   model.add(Dropout(0.5))
   model.add(Dense(7, activation = 'sigmoid', name="out"))
 
   return model
 
-class EarlyStop(Callback):
-  def on_batch_end(self, batch, logs = {}):
-    if logs.get('loss') <= 1.0:
-      self.model.stop_training = True
-
-class EarlyStop2(Callback):
-  def on_batch_end(self, batch, logs = {}):
-    if logs.get('loss') <= 1.0:
-      self.model.stop_training = True
-
 def train_model():
-  sess = tf.Session()
-  img = tf.placeholder(name="img", dtype=tf.float32, shape=(1, 224, 224, 3))
-  var = tf.get_variable("weights", dtype=tf.float32, shape=(1, 224, 224, 3))
-  val = img + var
-  out = tf.identity(val, name="out")
 
-  with sess.as_default():
-    sess.run(tf.global_variables_initializer())
+  model = make_model()
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
 
-    model = make_model()
-    model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
+  model.summary()
 
-    model.summary()
-
-    datagen = ImageDataGenerator()
-    train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
-    valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
+  datagen = ImageDataGenerator()
+  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
+  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
  
-    #tf.initialize_all_variables().run()
-    tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()))
-    #early_stop = EarlyStop()
+  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()), histogram_freq=2, write_graph=True, write_images=True)
 
-    g = tf.get_default_graph()
-    tf.contrib.quantize.create_training_graph(input_graph=g, quant_delay=2000000)
+  model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard]).history
 
-
-    model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard])
-
-
-    #for layer in model.layers[:4]:
-    #   layer.trainable = False
-    #for layer in model.layers[4:]:
-    #   layer.trainable = True
-  
-    #for layer in model.layers:
-    #   layer.trainable = True
-  
-    #early_stop = EarlyStop2()
-
-    #model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.ic, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard])
-    converter = tf.lite.TFLiteConverter.from_session(sess, [img], [out])
-    tflite_model = converter.convert()
-    open("converted_model.tflite", "wb").write(tflite_model)
-
-    eval_graph_file = 'graph.pb'
-    checkpoint_name = 'checkpoint_a'
-
-    with open(eval_graph_file, 'w') as f:
-      f.write(str(g.as_graph_def()))
-      saver = tf.train.Saver()
-      saver.save(sess, checkpoint_name)
-
-    model.save_weights(model_weights_path)
+  model.save_weights(model_weights_path)
 
 def test_model():
   test_samples = len(os.listdir(args.test_dir + "/0"))

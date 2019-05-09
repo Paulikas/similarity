@@ -46,8 +46,8 @@ plt.xticks(rotation='vertical')
 
 plt.xlabel('sample', fontdict=font)
 plt.ylabel('correlation', fontdict=font)
-plt.text(1218, -0.2, 'anchor to \n negative', fontdict=font1)
-plt.text(1218, 0.1, 'anchor to \n positive', fontdict=font2)
+#plt.text(1218, -0.2, 'anchor to \n negative', fontdict=font1)
+#plt.text(1218, 0.1, 'anchor to \n positive', fontdict=font2)
 
 plt.plot(p, linestyle="",marker="+")
 

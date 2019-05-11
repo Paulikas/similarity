@@ -8,11 +8,12 @@ from tensorflow.keras import backend, applications, optimizers
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Input, Dropout, Flatten, Dense
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.callbacks import Callback
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import Callback, TensorBoard, ModelCheckpoint
+from tensorflow import saved_model
 
 import os.path
 import argparse
+import json, h5py
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -22,8 +23,7 @@ parser = argparse.ArgumentParser(description = 'Build a top layer for the simila
 parser.add_argument('-r', '--train-model', dest = 'train_model', action = 'store_true')
 parser.add_argument('-s', '--test-model', dest = 'test_model', action = 'store_true')
 
-parser.add_argument('-l', '--lc', dest = 'lc', type = int, default = 0)
-parser.add_argument('-i', '--ic', dest = 'ic', type = int, default = 0)
+parser.add_argument('-l', '--lc', dest = 'lc', type = int, default = 8)
 
 parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3, help = 'Batch size')
 parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5, help = 'Number of epochs to train the model.')
@@ -33,7 +33,8 @@ parser.add_argument('-u', '--test-dir', dest = 'test_dir', default = '/opt/datas
 
 args = parser.parse_args()
 
-model_weights_path = 'model_weights.h5'
+checkpont_path = 'checkpoints/model.h5'
+checkpont_dir = os.path.dirname(checkpont_path)
 
 argN = 64
 
@@ -49,8 +50,8 @@ def triplet_loss(N = argN, epsilon = 1e-6):
     negative_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, negative)), axis = 0, keepdims = True)
 
     # -ln(-x/N+1)
-    positive_distance = -tf.math.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
-    negative_distance = -tf.math.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    positive_distance = -tf.math.log(-tf.math.divide((positive_distance), beta) + 1 + epsilon)
+    negative_distance = -tf.math.log(-tf.math.divide((N - negative_distance), beta) + 1 + epsilon)
 
     loss = negative_distance + positive_distance
     return loss
@@ -62,7 +63,7 @@ def pd(N = argN, epsilon = 1e-6):
     anchor = y_pred[0::3]
     positive = y_pred[1::3]
     positive_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, positive)), axis=0)
-    positive_distance = -tf.math.log(-tf.divide((positive_distance), beta) + 1 + epsilon)
+    positive_distance = -tf.math.log(-tf.math.divide((positive_distance), beta) + 1 + epsilon)
     return backend.mean(positive_distance)
   return pd
 
@@ -72,7 +73,7 @@ def nd(N = argN, epsilon = 1e-06):
     anchor = y_pred[0::3]
     negative = y_pred[2::3]
     negative_distance = tf.reduce_sum(input_tensor=tf.square(tf.subtract(anchor, negative)), axis=0)
-    negative_distance = -tf.math.log(-tf.divide((N - negative_distance), beta) + 1 + epsilon)
+    negative_distance = -tf.math.log(-tf.math.divide((N - negative_distance), beta) + 1 + epsilon)
     return backend.mean(negative_distance)
   return nd
 
@@ -80,22 +81,13 @@ def make_top_model(input_shape):
   return top_model
 
 def make_model():
-  #input_tensor = Input(shape = (224, 224, 3), name = 'input')
-  base_model = applications.VGG16(include_top = False, weights = 'imagenet') #, input_tensor = input_tensor)
+  #input_tensor = Input(shape = (224, 224, 3),  , name = 'input')
 
-  #for i in range(args.lc):  
-  #  base_model.layers.pop()
-  
-  #for layer in base_model.layers:
-  #  layer.trainable = False
+  base_model = applications.VGG16(include_top = False, weights = 'imagenet', input_shape = (224, 224, 3))
 
   model = Sequential()
-  if args.lc > 0:
-    for layer in base_model.layers[:-1 * args.lc]:
-      model.add(layer)
-  else:
-    for layer in base_model.layers:
-      model.add(layer)
+  for layer in base_model.layers[:-1 * args.lc]:
+    model.add(layer)
   
   for layer in model.layers:
     layer.trainable = False
@@ -103,34 +95,42 @@ def make_model():
   model.add(Dense(64, activation = 'sigmoid', input_shape = (1, 28, 28, 256)))
   model.add(Dropout(0.5))
   model.add(Dense(7, activation = 'sigmoid', name="out"))
+  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
 
   return model
 
 def train_model():
 
   model = make_model()
-  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
-
+  
   model.summary()
 
   datagen = ImageDataGenerator()
   train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
   valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
  
-  tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()), histogram_freq=2, write_graph=True, write_images=True)
+  cb_tensorboard = TensorBoard(log_dir = "./logs/{}".format(time()), histogram_freq = 2, write_graph = True, write_images = True)
+  cb_checkpoint = ModelCheckpoint(checkpont_path, save_weights_only = False, period = 100, verbose = 1)
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [tensorboard]).history
-
-  model.save_weights(model_weights_path)
+  model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [cb_tensorboard, cb_checkpoint])
+  
+  #tf.saved_model.save(model, 'checkpoints')
+  tf.keras.experimental.export_saved_model(model, 'checkpoints')
 
 def test_model():
   test_samples = len(os.listdir(args.test_dir + "/0"))
   datagen = ImageDataGenerator()
+
   test_generator = datagen.flow_from_directory(directory = args.test_dir, target_size = (224, 224), batch_size = test_samples, class_mode = 'categorical', shuffle = False)
   
+  #model = tf.keras.experimental.load_from_saved_model('checkpoints')
+  #model.summary()
+
   model = make_model()
-  model.load_weights(model_weights_path)
-  model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
+  model.load_weights(checkpont_path)
+
+  #model = tf.saved_model.load("checkpoints/")
+
 
   results = model.predict_generator(generator = test_generator, steps = 1, verbose = 0)
  
@@ -201,3 +201,4 @@ if __name__ == '__main__':
     train_model()
   elif args.test_model:
     test_model()   
+

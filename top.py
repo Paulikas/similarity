@@ -7,9 +7,10 @@ from PIL import Image
 from tensorflow import saved_model
 from tensorflow.keras import backend, applications, optimizers
 from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Input, Dropout, Flatten, Dense
+from tensorflow.keras.layers import Input, Dropout, Flatten, Dense, Reshape
 from tensorflow.keras.callbacks import Callback, TensorBoard, ModelCheckpoint
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.framework import ops
 
 import argparse
 import json, h5py, os, shutil, sys
@@ -25,20 +26,33 @@ parser.add_argument('-s', '--test-model', dest = 'test_model', action = 'store_t
 parser.add_argument('-l', '--lc', dest = 'lc', type = int, default = 8)
 parser.add_argument('-b', '--batch-size', dest = 'batch_size', type = int, default = 3)
 parser.add_argument('-e', '--epochs', dest = 'epochs', type = int, default = 5)
-parser.add_argument('-t', '--train-dir', dest = 'train_dir', default = '/opt/datasets/data/simulated_flight_1/train/')
-parser.add_argument('-v', '--valid-dir', dest = 'valid_dir', default = '/opt/datasets/data/simulated_flight_1/valid/')
-parser.add_argument('-u', '--test-dir', dest = 'test_dir', default = '/opt/datasets/data/simulated_flight_1/test/')
 
 args = parser.parse_args()
 
 checkpoint_dir = 'runtime_files/saved_model'
 checkpoint_auto_dir = 'runtime_files/auto_saved_model.h5'
+train_dir_a = '/opt/datasets/data/simulated_flight_1/train_a'
+valid_dir_a = '/opt/datasets/data/simulated_flight_1/valid_a'
+
+train_dir_p = '/opt/datasets/data/simulated_flight_1/train_p'
+valid_dir_p = '/opt/datasets/data/simulated_flight_1/valid_p'
+
+train_dir_n = '/opt/datasets/data/simulated_flight_1/train_n'
+valid_dir_n = '/opt/datasets/data/simulated_flight_1/valid_n'
+
+test_dir_a = '/opt/datasets/data/simulated_flight_1/test_a'
+test_dir_p = '/opt/datasets/data/simulated_flight_1/test_p'
+test_dir_n = '/opt/datasets/data/simulated_flight_1/test_n'
+
 argN = 64
 
 def triplet_loss(N = argN, epsilon = 1e-6):
   def triplet_loss(y_true, y_pred):
     beta = N
-
+    print(y_pred.get_shape())
+    #print(y_true.shape)
+    #sys.exit()
+    
     anchor = y_pred[0::3]
     positive = y_pred[1::3]
     negative = y_pred[2::3]
@@ -75,54 +89,147 @@ def nd(N = argN, epsilon = 1e-06):
   return nd
 
 def make_model():
-  #input_tensor = Input(shape = (224, 224, 3),  , name = 'input')
-  base_model = applications.VGG16(include_top = False, weights = 'imagenet', input_shape = (224, 224, 3))
+  input_a = Input(shape = (224, 224, 3),  name = 'input_a')
+  input_p = Input(shape = (224, 224, 3),  name = 'input_p')
+  input_n = Input(shape = (224, 224, 3),  name = 'input_n')
 
-  model = Sequential()
-  for layer in base_model.layers[:-1 * args.lc]:
-    model.add(layer)
+  base_model = applications.VGG16(include_top = False, weights = 'imagenet')
+
+  model_a = Sequential()
+
+  l1_a = base_model.layers[0](input_a)
+  l1_p = base_model.layers[0](input_p)
+  l1_n = base_model.layers[0](input_n)
   
+  l2_a = base_model.layers[1](l1_a)
+  l2_p = base_model.layers[1](l1_p)
+  l2_n = base_model.layers[1](l1_n)
+  
+  l3_a = base_model.layers[2](l2_a)
+  l3_p = base_model.layers[2](l2_p)
+  l3_n = base_model.layers[2](l2_n)
+
+  l4_a = base_model.layers[3](l3_a)
+  l4_p = base_model.layers[3](l3_p)
+  l4_n = base_model.layers[3](l3_n)
+
+  l5_a = base_model.layers[4](l4_a)
+  l5_p = base_model.layers[4](l4_p)
+  l5_n = base_model.layers[4](l4_n)
+
+  l6_a = base_model.layers[5](l5_a)
+  l6_p = base_model.layers[5](l5_p)
+  l6_n = base_model.layers[5](l5_n)
+
+  l7_a = base_model.layers[6](l6_a)
+  l7_p = base_model.layers[6](l6_p)
+  l7_n = base_model.layers[6](l6_n)
+
+  l8_a = base_model.layers[7](l7_a)
+  l8_p = base_model.layers[7](l7_p)
+  l8_n = base_model.layers[7](l7_n)
+
+  l9_a = base_model.layers[8](l8_a)
+  l9_p = base_model.layers[8](l8_p)
+  l9_n = base_model.layers[8](l8_n)
+
+  #lt1 = tf.keras.layers.concatenate([l9_a, l9_p, l9_n], name='main_concat')
+
+  lt1 = Dense(64, activation = 'sigmoid')
+  lt2 = Dropout(0.5)
+  lt3 = Dense(8, activation = 'sigmoid')
+
+  lt1_a = lt1(l9_a)
+  lt1_p = lt1(l9_p)
+  lt1_n = lt1(l9_n)
+
+  lt2_a = lt2(lt1_a)
+  lt2_p = lt2(lt1_p)
+  lt2_n = lt2(lt1_n)
+
+  lt3_a = lt3(lt2_a)
+  lt3_p = lt3(lt2_p)
+  lt3_n = lt3(lt2_n)
+
+  output = tf.keras.layers.concatenate([lt3_a, lt3_p, lt3_n], axis = 0, name = 'out666')
+
+  model = tf.keras.models.Model(inputs = [input_a, input_p, input_n], outputs = output)
+
+
   for layer in model.layers:
+    if layer.name == 'dense':
+      break
     layer.trainable = False
 
-  model.add(Dense(64, activation = 'sigmoid', input_shape = (1, 28, 28, 256)))
-  model.add(Dropout(0.5))
-  model.add(Dense(7, activation = 'sigmoid', name="out"))
   model.compile(optimizer = optimizers.Adam(), loss = triplet_loss(), metrics = [pd(), nd()])
 
   return model
 
+def train_generator_triplet():
+  gen = ImageDataGenerator()
+  gen_a = gen.flow_from_directory(directory = train_dir_a, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_p = gen.flow_from_directory(directory = train_dir_p, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_n = gen.flow_from_directory(directory = train_dir_n, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  while True:
+    an = gen_a.next()
+    po = gen_p.next()
+    ne = gen_n.next()
+    yield [an[0], po[0], ne[0]], an[1]
+
+def valid_generator_triplet():
+  gen = ImageDataGenerator()
+  gen_a = gen.flow_from_directory(directory = valid_dir_a, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_p = gen.flow_from_directory(directory = valid_dir_p, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_n = gen.flow_from_directory(directory = valid_dir_n, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  while True:
+    an = gen_a.next()
+    po = gen_p.next()
+    ne = gen_n.next()
+    yield [an[0], po[0], ne[0]], an[1]
+
+def test_generator_triplet():
+  gen = ImageDataGenerator()
+  gen_a = gen.flow_from_directory(directory = test_dir_a, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_p = gen.flow_from_directory(directory = test_dir_p, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  gen_n = gen.flow_from_directory(directory = test_dir_n, target_size = (224, 224), batch_size = 1, class_mode = 'categorical', shuffle = False)
+  while True:
+    an = gen_a.next()
+    po = gen_p.next()
+    ne = gen_n.next()
+    yield [an[0], po[0], ne[0]], an[1]
+
 def train_model():
   model = make_model()
 
-  datagen = ImageDataGenerator()
-  train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
-  valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
+  #datagen = ImageDataGenerator()
+  #train_generator = datagen.flow_from_directory(directory = args.train_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
+  #valid_generator = datagen.flow_from_directory(directory = args.valid_dir, target_size = (224, 224), batch_size = args.batch_size, class_mode = 'categorical', shuffle = False)
  
-  cb_tensorboard = TensorBoard(log_dir = "./runtime_files/logs/{}".format(time()), histogram_freq = 2, write_graph = True, write_images = False)
+  cb_tensorboard = TensorBoard(log_dir = "./runtime_files/logs/{}".format(time()), histogram_freq = 2, write_graph = True, write_images = True)
   cb_checkpoint = ModelCheckpoint(checkpoint_auto_dir, save_weights_only = False, period = 100, verbose = 1)
 
-  model.fit_generator(generator = train_generator, steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator, validation_steps = 3, callbacks = [cb_tensorboard, cb_checkpoint])
+  model.fit_generator(generator = train_generator_triplet(), steps_per_epoch = argN, epochs = args.epochs, validation_data = valid_generator_triplet(), validation_steps = 3, callbacks = [cb_tensorboard, cb_checkpoint])
   
-  tf.keras.experimental.export_saved_model(model, checkpoint_dir)
-  #tf.saved_model.save(model, checkpoint_dir)
+  #tf.keras.experimental.export_saved_model(model, checkpoint_dir)
+  tf.saved_model.save(model, checkpoint_dir)
 
 def test_model():
-  test_samples = len(os.listdir(args.test_dir + "/0"))
-  datagen = ImageDataGenerator()
-  test_generator = datagen.flow_from_directory(directory = args.test_dir, target_size = (224, 224), batch_size = test_samples, class_mode = 'categorical', shuffle = False)
+  test_samples = len(os.listdir(test_dir_a + "/0"))
+  #datagen = ImageDataGenerator()
+  #test_generator = datagen.flow_from_directory(directory = args.test_dir, target_size = (224, 224), batch_size = test_samples, class_mode = 'categorical', shuffle = False)
   
-  #model = tf.keras.experimental.load_from_saved_model(checkpoint_dir)
+  model = tf.keras.experimental.load_from_saved_model(checkpoint_dir)
   #model = tf.saved_model.load(checkpoint_dir, tags = None)
 
-  model = make_model()
-  model.load_weights(checkpoint_auto_dir)
+  #model = make_model()
+  #model.load_weights(checkpoint_auto_dir)
 
-  results = model.predict_generator(generator = test_generator, steps = 1, verbose = 0)
+  results = model.predict_generator(generator = test_generator_triplet(), steps = test_samples, verbose = 0)
 
   N = argN
   beta = N
   epsilon = 1e-6
+
   anchor = results[0::3]
   positive = results[1::3]
   negative = results[2::3]
@@ -141,7 +248,7 @@ def test_model():
   min_n = sys.maxsize
   max_n = 0
 
-  for i in range(test_samples // 3):
+  for i in range(test_samples):
     pda = np.nansum(positive_distance[i])
     nda = np.nansum(positive_distance2[i])
     print(pda, "\t", nda)

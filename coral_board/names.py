@@ -1,6 +1,6 @@
 import tensorflow as tf
 gf = tf.GraphDef()   
-m_file = open('checkpoints/saved_model.pb','rb')
+m_file = open('../runtime_files/saved_model/saved_model.pb','rb')
 gf.ParseFromString(m_file.read())
 
 with open('somefile.txt', 'a') as the_file:

@@ -1,9 +1,9 @@
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.saved_model import tag_constants
 
-input_saved_model_dir = 'checkpoints'
+input_saved_model_dir = '../runtime_files/saved_model'
 output_graph_filename = 'frozen.pb'
-#output_node_names = "out"
+output_node_names = 'out666'
 input_binary = False
 input_saver_def_path = False
 restore_op_name = None

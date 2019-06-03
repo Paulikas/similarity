@@ -2,13 +2,14 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
-with open('corr') as csv_file:
+with open('pcorr_224_rgb.txt') as csv_file:
   csv_reader = csv.reader(csv_file, delimiter='\t')
   p = []
   n = []
   for row in csv_reader:
-    p.append(float(row[0].strip()))
-    n.append(float(row[1].strip()))
+    if len(row) == 2:
+        p.append(float(row[0].strip()))
+        n.append(float(row[1].strip()))
 
 #p = (p / np.linalg.norm(p))
 #n = (n / np.linalg.norm(n))
@@ -33,14 +34,14 @@ fig = plt.figure(figsize=(8, 3))
 ax = fig.add_subplot(1, 1, 1)
 major_ticks = np.arange(0, 1280, 64)
 #y_ticks = [0, 55, 110]
-y_ticks = [-0.4, 0.8]
+y_ticks = [-0.5, 0, 0.5, 1]
 ax.set_xticks(major_ticks)
 ax.set_yticks(y_ticks)
 ax.grid(which='both')
 ax.set_xlim(0, 1216)
-ax.set_ylim(-0.45, 0.85)
-ax.xaxis.set_label_coords(0.05, -0.2)
-ax.yaxis.set_label_coords(-0.01, 0.5)
+ax.set_ylim(-0.5, 1)
+ax.xaxis.set_label_coords(0.5, -0.21)
+ax.yaxis.set_label_coords(-0.05, 0.5)
 
 plt.xticks(rotation='vertical')
 
@@ -54,4 +55,5 @@ plt.plot(p, linestyle="",marker="+")
 
 plt.plot(n, linestyle="",marker="x")
 
+plt.savefig('pcorr_244_rgb.eps', format='eps', bbox_inches='tight')
 plt.show()

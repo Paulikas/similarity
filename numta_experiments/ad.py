@@ -41,7 +41,6 @@ ax.set_xlim(0, 1216)
 ax.xaxis.set_label_coords(0.05, -0.2)
 ax.yaxis.set_label_coords(-0.05, 0.5)
 
-
 plt.xticks(rotation='vertical')
 
 plt.xlabel('sample', fontdict=font)
